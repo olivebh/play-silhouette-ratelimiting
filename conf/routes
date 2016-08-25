@@ -1,0 +1,21 @@
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+GET        /                                                controllers.AppController.user
+
+POST       /signUp                                          controllers.SignUpController.submit
+
+POST       /signIn                                          controllers.SignInController.submit
+
+GET        /signOut                                         controllers.AppController.signOut
+
+
+# Rate-limiting
+GET        /limit                                           controllers.AppController.limit
+GET        /limitAndUserOnly                                controllers.AppController.limitUser
+
+# Authorization
+GET        /authorization/userOnly                          controllers.AppController.userOnly
+GET        /authorization/adminOnly                         controllers.AppController.adminOnly
+GET        /authorization/userOrAdmin                       controllers.AppController.userOrAdmin

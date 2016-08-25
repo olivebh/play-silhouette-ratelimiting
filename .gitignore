@@ -1,0 +1,27 @@
+logs
+target
+/.idea
+/.idea_modules
+/.classpath
+/.project
+/.settings
+/RUNNING_PID
+
+# Ignore Play! working directory #
+bin/
+/db
+.eclipse
+/logs/
+/modules
+/project/target
+/target
+tmp/
+test-result
+server.pid
+*.eml
+/dist/
+.cache*
+activator*
+
+# Mongo data
+data/
