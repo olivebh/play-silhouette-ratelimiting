@@ -2,11 +2,9 @@ package controllers
 
 import java.util.UUID
 
-import javax.inject.{ Inject, Named }
+import javax.inject.Inject
 
 import scala.concurrent.Future
-
-import akka.actor.{ ActorRef, actorRef2Scala }
 
 import play.api.i18n.{ I18nSupport, Messages, MessagesApi }
 import play.api.libs.concurrent.Execution.Implicits.defaultContext
@@ -19,10 +17,10 @@ import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.api.util.PasswordHasher
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 
+import daos.UserLimitDAO
 import models.User
 import services.UserService
 import utils.authentication.{ DefaultEnv, SignUpData }
-import utils.ratelimiting.RateLimitActor
 
 class SignUpController @Inject() (
     val messagesApi: MessagesApi,
@@ -30,7 +28,8 @@ class SignUpController @Inject() (
     userService: UserService,
     authInfoRepository: AuthInfoRepository,
     passwordHasher: PasswordHasher,
-    @Named(RateLimitActor.Name) val userLimitActor: ActorRef) extends Controller with I18nSupport {
+    userLimitDAO: UserLimitDAO
+    ) extends Controller with I18nSupport {
 
   def submit = Action.async(parse.json) { implicit request =>
     request.body.validate[SignUpData].fold(
@@ -51,8 +50,9 @@ class SignUpController @Inject() (
               email = Some(data.email),
               passwordInfo = None
             )
-            // Add new User to rate-limit map !!!
-            userLimitActor ! List(user)
+            
+            // Add new User to rate-limit map !!!            
+            userLimitDAO add List(user)
 
             val authInfo = passwordHasher.hash(data.password)
             for {

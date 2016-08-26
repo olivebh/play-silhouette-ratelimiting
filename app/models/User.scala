@@ -8,7 +8,7 @@ import com.mohiva.play.silhouette.api.{ Identity, LoginInfo }
 import com.mohiva.play.silhouette.api.util.PasswordInfo
 
 import utils.authorization.Roles.{ Role, UserRole }
-import utils.ratelimiting.RateLimitActor
+import utils.ratelimiting.RateLimit
 
 /** Represents a user.
   */
@@ -21,7 +21,7 @@ case class User(
   email: Option[String],
   passwordInfo: Option[PasswordInfo],
   role: Role = UserRole,
-  rateLimit: Long = RateLimitActor.DefaultLimit) extends Identity
+  rateLimit: Long = RateLimit.DefaultLimit) extends Identity
 
 object User {
 

@@ -32,7 +32,9 @@ import daos.mongo.UserDAOMongo
 import daos.mongo.PasswordInfoDaoMongo
 import services.{ UserService, UserServiceImpl }
 import utils.authentication.DefaultEnv
-import utils.ratelimiting.RateLimitActor
+import daos.UserLimitDAO
+import daos.rediss.UserLimitDAORedis
+import utils.ratelimiting.RateLimit
 
 /** The Guice module which wires all Silhouette dependencies.
   */
@@ -42,10 +44,12 @@ class SilhouetteModule extends AbstractModule with ScalaModule with AkkaGuiceSup
     */
   def configure() {
 
-    bindActor[RateLimitActor](RateLimitActor.Name)
-
-    bind[UserDAO].to[UserDAOMongo]
+    bind[UserLimitDAO].to[UserLimitDAORedis]
+    bind[RateLimit].asEagerSingleton()
+    
+    bind[UserDAO].to[UserDAOMongo]    
     bind[UserService].to[UserServiceImpl]
+    
     bind[DelegableAuthInfoDAO[PasswordInfo]].to[PasswordInfoDaoMongo]
 
     bind[Silhouette[DefaultEnv]].to[SilhouetteProvider[DefaultEnv]]

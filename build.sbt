@@ -26,6 +26,7 @@ libraryDependencies ++= Seq(
   "net.codingwell" %% "scala-guice" % "4.1.0",
   "com.iheart" %% "ficus" % "1.2.6", // config lib, used by Silhouette,
   "org.reactivemongo" %% "play2-reactivemongo" % "0.11.14",
+  "com.github.etaty" %% "rediscala" % "1.6.0",
   "org.scalatestplus.play" %% "scalatestplus-play" % "1.5.1" % Test
 ) ++ silhouetteLib
 

@@ -28,7 +28,6 @@ class SignInController @Inject() (
 		val messagesApi: MessagesApi,
 		silhouette: Silhouette[DefaultEnv],
 		userService: UserService,
-		//authInfoRepository: AuthInfoRepository,
 		credentialsProvider: CredentialsProvider,
 		configuration: Configuration,
 		clock: Clock) extends Controller with I18nSupport {
