@@ -32,7 +32,6 @@ class RateLimit @Inject() (
 
   /* every WindowSize.minutes do a refresh */
   system.scheduler.scheduleOnce(WindowSize.minutes) {
-    refreshAt = getFreshTime // reset time
     userLimitDAO.refresh
   }
   
@@ -51,7 +50,7 @@ object RateLimit {
 
   val WindowSize: Long = 1L // minutes
 
-  var refreshAt: LocalDateTime = getFreshTime // global clock, for resetting user limits
+  var refreshAt: LocalDateTime = LocalDateTime.now.plusMinutes(WindowSize) // global clock, for resetting user limits
 
   def getFreshTime: LocalDateTime = LocalDateTime.now.plusMinutes(WindowSize)
 

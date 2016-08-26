@@ -14,37 +14,37 @@ import daos.UserLimitDAO
 import models.User
 import redis.RedisClient
 import utils.ratelimiting.UserLimit
+import utils.ratelimiting.RateLimit
 
 class UserLimitDAORedis @Inject() (implicit system: ActorSystem) extends UserLimitDAO {
 
   private val redis = RedisClient()
 
-  private def limitKey(id: UUID): String = s"user:$id:limit"
+  private val LimitKey = "limit"
+  private val RemainingKey = "remaining"
+  private val UserKeyPrefix = "user:limit:"
 
-  private def remainingKey(id: UUID): String = s"user:$id:remaining"
-  
-  private def key(id: UUID): String = s"user:$id"
+  private def userKey(id: UUID): String = UserKeyPrefix + id
 
   def add(users: List[User]): Future[Boolean] = {
 
-    val (limits, remainings) = users.map { user =>
-      val lim = limitKey(user.userId) -> user.rateLimit
-      val rem = remainingKey(user.userId) -> user.rateLimit
-      lim -> rem
-    }.unzip
-    redis.mset(limits.toMap ++ remainings.toMap) // bulk insert
-    
-    
+    val users2Keys = users.map { user =>
+      val lim = "limit" -> user.rateLimit
+      val rem = "remaining" -> user.rateLimit
+      userKey(user.userId) -> Map(lim, rem)
+    }
+    Future.traverse(users2Keys) { case (key, map) => redis.hmset(key, map) } map {
+      _.foldLeft(true) { case (acc, b) => acc && b }
+    }
   }
 
   def find(userId: UUID): Future[UserLimit] = {
 
-    val (limKey, remKey) = (limitKey(userId), remainingKey(userId))
-
     val tr = redis.transaction()
-    tr.watch(limKey, remKey)
-    val futureLimit = tr.incrby(limKey, 0) // get Long...
-    val futureRemaining = tr.incrby(remKey, 0)
+    val key = userKey(userId)
+    tr.watch(key)
+    val futureLimit = tr.hincrby(key, LimitKey, 0)
+    val futureRemaining = tr.hincrby(key, RemainingKey, 0)
     tr.exec()
 
     for {
@@ -55,12 +55,11 @@ class UserLimitDAORedis @Inject() (implicit system: ActorSystem) extends UserLim
 
   def update(user: User): Future[(UserLimit, Boolean)] = {
 
-    val (limKey, remKey) = (limitKey(user.userId), remainingKey(user.userId))
-
     val tr = redis.transaction()
-    tr.watch(limKey, remKey)
-    val futureLimit = tr.incrby(limKey, 0)
-    val futureRemaining = tr.decr(remKey)
+    val key = userKey(user.userId)
+    tr.watch(key)
+    val futureLimit = tr.hincrby(key, LimitKey, 0)
+    val futureRemaining = tr.hincrby(key, RemainingKey, -1)
     tr.exec()
 
     for {
@@ -69,34 +68,44 @@ class UserLimitDAORedis @Inject() (implicit system: ActorSystem) extends UserLim
     } yield UserLimit(user.userId, limit, remaining) -> (remaining >= 0)
   }
 
-  def refresh: Future[Unit] = {
-    getAll flatMap { userLimits =>
-      val (lims, rems) = userLimits.map { u =>
-        val lim = limitKey(u.userId) -> u.limit
-        val rem = remainingKey(u.userId) -> u.limit
-        lim -> rem
-      }.unzip
-      redis.mset((lims ++ rems).toMap).map(_ => ())
+  def refresh: Future[Unit] = getAll flatMap { userLimits =>
+    println("REFRESH!")
+
+    val users2Keys = userLimits.map { u =>
+      val lim = LimitKey -> u.limit
+      val rem = RemainingKey -> u.limit
+      userKey(u.userId) -> Map(lim, rem)
     }
+
+    Future.traverse(users2Keys) {
+      case (key, map) => redis.hmset(key, map)
+    }.map(_ =>
+      RateLimit.refreshAt = RateLimit.getFreshTime // reset time
+    )
   }
 
   def cleanup: Future[Unit] = {
-    getAll map { userLimits =>
-      val (limKeys, remKeys) = userLimits.map(u => limitKey(u.userId) -> remainingKey(u.userId)).unzip
-      redis.del((limKeys ++ remKeys): _*)
-    }
+    for {
+      keys <- redis.keys(UserKeyPrefix + "*")
+      _ <- redis.del(keys: _*)
+    } yield ()
   }
 
   /** Gets all userLimits from Redis
     */
   private def getAll: Future[Seq[UserLimit]] = {
-    val futureUUIDs = redis.keys("user:*:limit") map { keys =>
-      keys map { k =>
-        UUID.fromString(k.split(":")(1))
+
+    redis.keys(UserKeyPrefix + "*") flatMap { keys =>
+      Future.traverse(keys) { key =>
+        val futureLimit = redis.hincrby(key, LimitKey, 0)
+        val futureRemaining = redis.hincrby(key, RemainingKey, 0)
+
+        for {
+          limit <- futureLimit
+          remaining <- futureRemaining
+        } yield UserLimit(UUID.fromString(key), limit, remaining)
+
       }
-    }
-    futureUUIDs flatMap { uuids =>
-      Future.traverse(uuids) { find(_) }
     }
   }
 
