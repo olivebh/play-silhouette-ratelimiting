@@ -1,13 +1,17 @@
 package utils.ratelimiting
 
+import java.time.LocalDateTime
+
 import javax.inject.{ Inject, Singleton }
+
+import scala.concurrent.duration.DurationLong
 
 import akka.actor.ActorSystem
 
+import play.api.inject.ApplicationLifecycle
 import play.api.libs.concurrent.Execution.Implicits.defaultContext
 
 import daos.{ UserDAO, UserLimitDAO }
-import play.api.inject.ApplicationLifecycle
 
 /** Initializes Redis db with UserLimits.
   *
@@ -31,12 +35,13 @@ class RateLimit @Inject() (
   }
 
   /* every WindowSize.minutes do a refresh */
-  system.scheduler.scheduleOnce(WindowSize.minutes) {
+  val bla = system.scheduler.schedule(0.seconds, WindowSize.minutes) {
     userLimitDAO.refresh
   }
-  
+
   /* on app stop, cleanup Redis */
-  lifecycle.addStopHook { () => 
+  lifecycle.addStopHook { () =>
+    bla.cancel()
     userLimitDAO.cleanup
   }
 

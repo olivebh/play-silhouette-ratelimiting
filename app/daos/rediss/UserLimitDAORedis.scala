@@ -29,8 +29,8 @@ class UserLimitDAORedis @Inject() (implicit system: ActorSystem) extends UserLim
   def add(users: List[User]): Future[Boolean] = {
 
     val users2Keys = users.map { user =>
-      val lim = "limit" -> user.rateLimit
-      val rem = "remaining" -> user.rateLimit
+      val lim = LimitKey -> user.rateLimit
+      val rem = RemainingKey -> user.rateLimit
       userKey(user.userId) -> Map(lim, rem)
     }
     Future.traverse(users2Keys) { case (key, map) => redis.hmset(key, map) } map {
@@ -100,10 +100,12 @@ class UserLimitDAORedis @Inject() (implicit system: ActorSystem) extends UserLim
         val futureLimit = redis.hincrby(key, LimitKey, 0)
         val futureRemaining = redis.hincrby(key, RemainingKey, 0)
 
+        val uuidString = key.split(":")(2)
+        
         for {
           limit <- futureLimit
           remaining <- futureRemaining
-        } yield UserLimit(UUID.fromString(key), limit, remaining)
+        } yield UserLimit(UUID.fromString(uuidString), limit, remaining)
 
       }
     }
