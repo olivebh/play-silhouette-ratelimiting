@@ -16,16 +16,24 @@ import play.api.libs.concurrent.Execution.Implicits.defaultContext
 import RateLimitActor.{ Refresh, UserLimit }
 import daos.UserDAO
 import models.User
+import play.api.inject.ApplicationLifecycle
+import scala.concurrent.Future
 
 @Singleton
 class RateLimitActor @Inject() (
     system: ActorSystem,
+    lifecycle: ApplicationLifecycle,
     userDAO: UserDAO) extends Actor {
   import RateLimitActor._
 
   private val logger = Logger(this.getClass())
 
   private val userLimits = mutable.Map[UUID, UserLimit]()
+  
+  private def addUserToMap(user: User) = {
+    val usersLimit = UserLimit(limit = user.rateLimit, remaining = user.rateLimit, expirationTime = getFreshTime)
+    userLimits += (user.userId -> usersLimit)
+  }
 
   /* Actors are bound eagerly!
    * @see https://github.com/playframework/playframework/blob/3e629df347e847db0476eb798d55dc5254efc4fa/framework/src/play-guice/src/main/scala/play/api/libs/concurrent/AkkaGuiceSupport.scala#L57
@@ -35,13 +43,15 @@ class RateLimitActor @Inject() (
   /*
    * refresh automatically
    */
-  system.scheduler.scheduleOnce(WindowSize.minutes) {
+  val refreshJob = system.scheduler.schedule(WindowSize.minutes, WindowSize.minutes) {
     self ! Refresh()
   }
 
-  private def addUserToMap(user: User) = {
-    val usersLimit = UserLimit(limit = user.rateLimit, remaining = user.rateLimit, expirationTime = getFreshTime)
-    userLimits += (user.userId -> usersLimit)
+  /* on app stop */
+  lifecycle.addStopHook { () =>
+    Future.successful {
+      refreshJob.cancel()
+    }
   }
 
   def receive = {
